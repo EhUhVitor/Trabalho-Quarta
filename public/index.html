@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>Gerenciamento de Estoque</title>
+ <link rel="stylesheet" href="style.css">
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <h1>Gerenciamento de Estoque</h1>
+        <form id="form-produto">
+            <input type="hidden" id="indice-edicao">
+            <label>Nome do Produto:</label><br>
+            <input type="text" id="nome-produto"><br><br>
+            <div class="linha">
+                <div>
+                    <label>Quantidade:</label>
+                    <input type="number" id="quantidade"><br>
+                </div>
+                <div>
+                    <label>Preço:</label>
+                    <input type="number" id="preco">
+                </div>
+                <div>
+                    <button id="adicionar">+ Adicionar produto</button>
+                </div>
+            </div>
+        </form>
+
+        <p class="aviso"></p>
+
+        <table id="tabela-estoque">
+            <thead>
+                <tr>
+                    <th>Nome do Produto</th>
+                    <th>Quantidade</th>
+                    <th>Preço</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody id="corpo-tabela"></tbody>
+        </table>
+
+        <div id="confirmacao-remocao" class="confirmacao">
+            <p>Tem certeza de que deseja remover este item?</p>
+            <button id="confirmar-sim" class="btn-confirmacao">Sim</button>
+            <button id="confirmar-nao" class="btn-confirmacao">Não</button>
+        </div>
+
+        <div id="notification" class="notification"></div>
+
+        <script>
+            document.getElementById('adicionar').addEventListener('click', adicionarProduto);
+
+            function showNotification(message) {
+                const notification = document.getElementById('notification');
+                notification.textContent = message;
+                notification.classList.add('show');
+                setTimeout(() => {
+                    notification.classList.remove('show');
+                }, 3000);
+            }
+
+            async function adicionarProduto(event) {
+                event.preventDefault();
+                const id = document.getElementById('indice-edicao').value;
+                const nomeProduto = document.getElementById('nome-produto').value;
+                const quantidade = parseInt(document.getElementById('quantidade').value);
+                const preco = parseFloat(document.getElementById('preco').value);
+
+                if (nomeProduto && !isNaN(quantidade) && !isNaN(preco)) {
+                    const produto = { nome: nomeProduto, quantidade, preco };
+
+                    if (id) {
+                        await fetch(`/api/produtos/${id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(produto),
+                        });
+                        document.getElementById('indice-edicao').value = '';
+                        document.getElementById('adicionar').textContent = 'Adicionar produto';
+                        showNotification('Produto editado com sucesso!');
+                    } else {
+                        await fetch('/api/produtos', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(produto),
+                        });
+                        showNotification('Produto adicionado com sucesso!');
+                    }
+                    document.getElementById('form-produto').reset();
+                    atualizarTabela();
+                } else {
+                    alert('Por favor, preencha todos os campos corretamente.');
+                }
+            }
+
+            async function atualizarTabela() {
+                const resposta = await fetch('/api/produtos');
+                const produtos = await resposta.json();
+                const corpoTabela = document.getElementById('corpo-tabela');
+                corpoTabela.innerHTML = '';
+
+                produtos.forEach((produto) => {
+                    const linha = document.createElement('tr');
+                    linha.innerHTML = `
+                        <td>${produto.nome}</td>
+                        <td>${produto.quantidade}</td>
+                        <td>R$ ${produto.preco.toFixed(2)}</td>
+                        <td>
+                            <button class='editar' data-id='${produto.id}'>Editar</button>
+                            <button class='remover' data-id='${produto.id}'>Remover</button>
+                        </td>
+                    `;
+                    corpoTabela.appendChild(linha);
+                });
+
+                document.querySelectorAll('.editar').forEach(botao => botao.addEventListener('click', iniciarEdicao));
+                document.querySelectorAll('.remover').forEach(botao => botao.addEventListener('click', (event) => {
+                    confirmarRemocao(event.target.getAttribute('data-id'));
+                }));
+            }
+
+            function iniciarEdicao(event) {
+                const id = event.target.getAttribute('data-id');
+                fetch(`/api/produtos/${id}`)
+                    .then(response => response.json())
+                    .then(produto => {
+                        document.getElementById('indice-edicao').value = produto.id;
+                        document.getElementById('nome-produto').value = produto.nome;
+                        document.getElementById('quantidade').value = produto.quantidade;
+                        document.getElementById('preco').value = produto.preco;
+                        document.getElementById('adicionar').textContent = 'Salvar Alterações';
+                    });
+            }
+
+            function confirmarRemocao(id) {
+                const confirmacaoRemocao = document.getElementById("confirmacao-remocao");
+                confirmacaoRemocao.style.display = "block";
+
+                const btnSim = document.getElementById("confirmar-sim");
+                const btnNao = document.getElementById("confirmar-nao");
+
+                // Ação ao clicar em "Sim"
+                btnSim.onclick = function () {
+                    removerProduto(id);
+                    confirmacaoRemocao.style.display = "none";
+                };
+
+                // Ação ao clicar em "Não"
+                btnNao.onclick = function () {
+                    confirmacaoRemocao.style.display = "none";
+                };
+            }
+
+            async function removerProduto(id) {
+                await fetch(`/api/produtos/${id}`, { method: 'DELETE' });
+                atualizarTabela();
+                showNotification('Produto removido com sucesso!');
+            }
+
+            atualizarTabela();
+        </script>
+    </div>
+</body>
+</html>
